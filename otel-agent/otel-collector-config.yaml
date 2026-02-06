@@ -13,11 +13,6 @@ processors:
   batch:
     timeout: 10s
     send_batch_size: 1024
-  resource:
-    attributes:
-      - key: service.namespace
-        value: "go-otel-example"
-        action: insert
 
 exporters:
   otlphttp/tempo:
@@ -46,13 +41,13 @@ service:
   pipelines:
     traces:
       receivers: [otlp]
-      processors: [memory_limiter, resource, batch]
+      processors: [memory_limiter, batch]
       exporters: [otlphttp/tempo, debug]
     metrics:
       receivers: [otlp]
-      processors: [memory_limiter, resource, batch]
+      processors: [memory_limiter, batch]
       exporters: [prometheus, debug]
     logs:
       receivers: [otlp]
-      processors: [memory_limiter, resource, batch]
+      processors: [memory_limiter, batch]
       exporters: [otlphttp/loki, debug]
