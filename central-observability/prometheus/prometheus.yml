@@ -1,0 +1,47 @@
+global:
+  scrape_interval: 10s
+  evaluation_interval: 30s
+
+# Alertmanager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["alertmanager:9093"]
+
+# Load alert rules
+rule_files:
+  - "/etc/prometheus/alert-rules.yml"
+
+scrape_configs:
+  - job_name: "tempo"
+    static_configs:
+      - targets: ["tempo-server:3200"]
+
+  - job_name: "otel-collector"
+    static_configs:
+      - targets: ["host.docker.internal:8889"]
+
+  - job_name: "go-gin-server"
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["host.docker.internal:8080"]
+
+  - job_name: "laravel-example-server"
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["host.docker.internal:8043"]
+
+  - job_name: "streamline-api-server"
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["host.docker.internal:8086"] # streamline-api-server
+
+  - job_name: "streamline-web-server"
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["host.docker.internal:8001"] # streamline-frontend-server
+
+  - job_name: "streamline-report-generator-server"
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["host.docker.internal:8072"] # streamline-report-generator-server

@@ -1,0 +1,197 @@
+groups:
+  - name: service_availability
+    interval: 30s
+    rules:
+      # Alert when a service is down
+      - alert: ServiceDown
+        expr: up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Service {{ $labels.job }} is down"
+          description: "{{ $labels.job }} on {{ $labels.instance }} has been down for more than 1 minute."
+
+      # Alert when a service has high error rate
+      - alert: HighErrorRate
+        expr: |
+          (
+            sum(rate(http_server_duration_count{http_status_code=~"5.."}[5m])) by (job, instance)
+            /
+            sum(rate(http_server_duration_count[5m])) by (job, instance)
+          ) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High error rate detected on {{ $labels.job }}"
+          description: "{{ $labels.job }} on {{ $labels.instance }} has error rate above 5% (current: {{ $value | humanizePercentage }})."
+
+      # Alert when a service has very high error rate
+      - alert: CriticalErrorRate
+        expr: |
+          (
+            sum(rate(http_server_duration_count{http_status_code=~"5.."}[5m])) by (job, instance)
+            /
+            sum(rate(http_server_duration_count[5m])) by (job, instance)
+          ) > 0.20
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical error rate detected on {{ $labels.job }}"
+          description: "{{ $labels.job }} on {{ $labels.instance }} has error rate above 20% (current: {{ $value | humanizePercentage }})."
+
+  - name: performance
+    interval: 30s
+    rules:
+      # Alert on high response time (P95)
+      - alert: HighResponseTime
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(http_server_duration_bucket[5m])) by (job, le)
+          ) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High response time on {{ $labels.job }}"
+          description: "{{ $labels.job }} has P95 latency above 1s (current: {{ $value | humanizeDuration }})."
+
+      # Alert on very high response time (P95)
+      - alert: VeryHighResponseTime
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(http_server_duration_bucket[5m])) by (job, le)
+          ) > 3
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Very high response time on {{ $labels.job }}"
+          description: "{{ $labels.job }} has P95 latency above 3s (current: {{ $value | humanizeDuration }})."
+
+      # Alert on high request rate
+      - alert: HighRequestRate
+        expr: |
+          sum(rate(http_server_duration_count[5m])) by (job) > 1000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High request rate on {{ $labels.job }}"
+          description: "{{ $labels.job }} is receiving more than 1000 requests per second (current: {{ $value | humanize }} req/s)."
+
+  - name: otel_collector
+    interval: 30s
+    rules:
+      # Alert when OTEL collector is dropping spans
+      - alert: OTelCollectorDroppingSpans
+        expr: rate(otelcol_processor_refused_spans[5m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "OTEL Collector is dropping spans"
+          description: "OTEL Collector has been dropping {{ $value | humanize }} spans/second for more than 5 minutes."
+
+      # Alert when OTEL collector has high memory usage
+      - alert: OTelCollectorHighMemory
+        expr: process_resident_memory_bytes{job="otel-collector"} > 1000000000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "OTEL Collector high memory usage"
+          description: "OTEL Collector is using more than 1GB of memory (current: {{ $value | humanize1024 }}B)."
+
+  - name: prometheus
+    interval: 30s
+    rules:
+      # Alert when Prometheus is having trouble scraping targets
+      - alert: PrometheusScrapeFailing
+        expr: up{job!="tempo"} == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Prometheus cannot scrape {{ $labels.job }}"
+          description: "Prometheus has failed to scrape {{ $labels.job }} on {{ $labels.instance }} for more than 5 minutes."
+
+      # Alert when Prometheus config reload fails
+      - alert: PrometheusConfigReloadFailed
+        expr: prometheus_config_last_reload_successful == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Prometheus configuration reload has failed"
+          description: "Prometheus configuration reload has failed. Check the Prometheus logs."
+
+  - name: tempo
+    interval: 30s
+    rules:
+      # Alert when Tempo ingestion is failing
+      - alert: TempoIngestionFailing
+        expr: rate(tempo_ingester_blocks_flushed_total[5m]) == 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Tempo is not ingesting traces"
+          description: "Tempo has not flushed any blocks in the last 10 minutes, which may indicate ingestion issues."
+
+  - name: application_specific
+    interval: 30s
+    rules:
+      # Alert on specific HTTP endpoints with high error rates
+      - alert: EndpointHighErrorRate
+        expr: |
+          (
+            sum(rate(http_server_duration_count{http_status_code=~"5..", http_route!=""}[5m])) by (job, http_route)
+            /
+            sum(rate(http_server_duration_count{http_route!=""}[5m])) by (job, http_route)
+          ) > 0.10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High error rate on endpoint {{ $labels.http_route }} in {{ $labels.job }}"
+          description: "Endpoint {{ $labels.http_route }} in {{ $labels.job }} has error rate above 10% (current: {{ $value | humanizePercentage }})."
+
+      # Alert on slow database queries (if you're tracking them)
+      - alert: SlowDatabaseQueries
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(db_query_duration_bucket[5m])) by (job, le)
+          ) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Slow database queries detected in {{ $labels.job }}"
+          description: "{{ $labels.job }} has P95 database query latency above 500ms (current: {{ $value | humanizeDuration }})."
+
+      # Alert when too many active connections
+      - alert: HighActiveConnections
+        expr: http_server_active_requests > 100
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High number of active connections on {{ $labels.job }}"
+          description: "{{ $labels.job }} has more than 100 active connections (current: {{ $value }})."
+
+  - name: streamline-service-health
+    interval: 30s
+    rules:
+      # Alert per service per job - Streamline health checks
+      - alert: StreamlineServiceUnhealthy
+        expr: streamline_health_check == 0
+        for: 1m
+        labels:
+          severity: critical
+          product: streamline
+        annotations:
+          summary: "{{ $labels.service }} is unhealthy on {{ $labels.job }}"
+          description: "Health check for {{ $labels.service }} has been failing on {{ $labels.job }} for more than 1 minute."

@@ -1,0 +1,119 @@
+global:
+  resolve_timeout: 5m
+
+# The root route on which each incoming alert enters.
+route:
+  # The root route must not have any matchers as it is the entry point for all alerts
+  receiver: 'default-receiver'
+  
+  # How long to wait before sending a notification again if it has already been sent successfully for an alert
+  repeat_interval: 4h
+  
+  # Group alerts by these labels
+  group_by: ['alertname', 'cluster', 'service', 'job']
+  
+  # How long to initially wait to send a notification for a group of alerts
+  group_wait: 30s
+  
+  # How long to wait before sending a notification about new alerts that are added to a group of alerts
+  group_interval: 5m
+  
+  # Child routes
+  routes:
+    # Critical alerts - send immediately
+    - match:
+        severity: critical
+      receiver: 'critical-receiver'
+      repeat_interval: 1h
+      group_wait: 10s
+      
+    # Warning alerts - can wait a bit longer
+    - match:
+        severity: warning
+      receiver: 'warning-receiver'
+      repeat_interval: 4h
+
+# Inhibition rules allow to mute a set of alerts given that another alert is firing
+inhibit_rules:
+  # Mute warning if critical alert is firing for the same service
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname', 'job', 'instance']
+
+receivers:
+  # Default receiver - logs to console
+  - name: 'default-receiver'
+    # webhook_configs:
+    #   - url: 'http://your-webhook-url/alerts'
+    #     send_resolved: true
+  
+  # Critical alerts receiver
+  - name: 'critical-receiver'
+    # Uncomment and configure your notification channels below:
+    
+    # Slack example:
+    # slack_configs:
+    #   - api_url: 'YOUR_SLACK_WEBHOOK_URL'
+    #     channel: '#alerts-critical'
+    #     title: '{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
+    #     text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+    #     send_resolved: true
+    
+    # Email example:
+    # email_configs:
+    #   - to: 'oncall@example.com'
+    #     from: 'alertmanager@example.com'
+    #     smarthost: 'smtp.gmail.com:587'
+    #     auth_username: 'your-email@gmail.com'
+    #     auth_password: 'your-app-password'
+    #     headers:
+    #       Subject: 'CRITICAL: {{ .GroupLabels.alertname }}'
+    
+    # PagerDuty example:
+    # pagerduty_configs:
+    #   - service_key: 'YOUR_PAGERDUTY_SERVICE_KEY'
+    #     description: '{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
+    
+    # Webhook example:
+    # webhook_configs:
+    #   - url: 'http://your-webhook-url/critical'
+    #     send_resolved: true
+    
+    # Discord example:
+    # discord_configs:
+    #   - webhook_url: 'YOUR_DISCORD_WEBHOOK_URL'
+    #     title: '🚨 CRITICAL ALERT'
+    #     message: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+  
+  # Warning alerts receiver
+  - name: 'warning-receiver'
+    # Uncomment and configure your notification channels below:
+    
+    # Slack example:
+    # slack_configs:
+    #   - api_url: 'YOUR_SLACK_WEBHOOK_URL'
+    #     channel: '#alerts-warning'
+    #     title: '{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
+    #     text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+    #     send_resolved: true
+    
+    # Email example:
+    # email_configs:
+    #   - to: 'team@example.com'
+    #     from: 'alertmanager@example.com'
+    #     smarthost: 'smtp.gmail.com:587'
+    #     auth_username: 'your-email@gmail.com'
+    #     auth_password: 'your-app-password'
+    #     headers:
+    #       Subject: 'WARNING: {{ .GroupLabels.alertname }}'
+    
+    # Webhook example:
+    # webhook_configs:
+    #   - url: 'http://your-webhook-url/warning'
+    #     send_resolved: true
+
+# Templates for notifications (optional)
+# templates:
+#   - '/etc/alertmanager/templates/*.tmpl'
